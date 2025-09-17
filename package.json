@@ -11,6 +11,8 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "db:import-messages": "node scripts/importMessages.js",
+    "db:seed": "node prisma/seed.js",
+    "db:reset": "prisma db push --force-reset && node prisma/seed.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {
