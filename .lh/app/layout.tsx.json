@@ -1,0 +1,18 @@
+{
+    "sourceFile": "app/layout.tsx",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1758120213596,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1758120213596,
+            "name": "Commit-0",
+            "content": "import './globals.css';\nimport type { Metadata } from 'next';\nimport Image from 'next/image';\nimport heroBg from '@/theme_logos/garage3d.jpg';\nimport { Inter } from 'next/font/google';\nimport { AuthProvider } from '@/contexts/AuthContext';\nimport { LanguageProvider } from '@/contexts/LanguageContext';\nimport { Toaster } from '@/components/ui/sonner';\n\nconst inter = Inter({ subsets: ['latin'] });\n\nexport const metadata: Metadata = {\n  title: 'Garagematch - Professional Garage Booking Platform',\n  description: 'Connect with trusted garages for all your vehicle maintenance needs',\n};\n\nexport const viewport: Viewport = {\n  themeColor: '#2563eb',\n};\n\nexport default function RootLayout({\n  children,\n}: {\n  children: React.ReactNode;\n}) {\n  return (\n    <html lang=\"en\">\n      <body className={inter.className}>\n        <div className=\"fixed inset-0 -z-10\">\n          <Image src={heroBg} alt=\"Background\" fill className=\"object-cover opacity-20\" priority />\n        </div>\n        <LanguageProvider>\n          <AuthProvider>\n            {children}\n            <Toaster />\n          </AuthProvider>\n        </LanguageProvider>\n      </body>\n    </html>\n  );\n}"
+        }
+    ]
+}
