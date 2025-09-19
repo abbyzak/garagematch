@@ -53,6 +53,7 @@ export function GarageOwnerDashboard() {
   const [isCreatingProfile, setIsCreatingProfile] = useState(!garageProfile);
   const [ownedGarages, setOwnedGarages] = useState<any[]>([]);
   const [selectedGarageId, setSelectedGarageId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<any[]>([]);
 
   // Profile form state
   const [profileForm, setProfileForm] = useState<GarageProfile>({
@@ -151,6 +152,21 @@ export function GarageOwnerDashboard() {
     };
     load();
   }, [selectedGarageId]);
+
+  // Load conversations for owner
+  useEffect(() => {
+    if (!user) return;
+    const loadConvos = async () => {
+      try {
+        const res = await fetch(`/api/messages/conversations?userId=${encodeURIComponent(user.id)}`, { cache: 'no-store' });
+        const json = await res.json();
+        if (res.ok) setConversations(Array.isArray(json.items) ? json.items : []);
+      } catch (e) {
+        console.error('load conversations failed', e);
+      }
+    };
+    loadConvos();
+  }, [user]);
 
   const stats = [
     { 
@@ -507,11 +523,12 @@ export function GarageOwnerDashboard() {
           transition={{ delay: 0.2 }}
         >
           <Tabs defaultValue="bookings" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="bookings">Bookings</TabsTrigger>
               <TabsTrigger value="calendar">Calendar</TabsTrigger>
               <TabsTrigger value="profile">Garage Profile</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
+              <TabsTrigger value="messages">Messages</TabsTrigger>
             </TabsList>
 
             <TabsContent value="bookings" className="space-y-6">
@@ -581,6 +598,47 @@ export function GarageOwnerDashboard() {
                               </Link>
                             )}
                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="messages">
+              <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
+                <CardHeader>
+                  <CardTitle>Recent Conversations</CardTitle>
+                  <CardDescription>Chat with clients (includes guest requests)</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {conversations.length === 0 ? (
+                    <div className="text-center py-12 text-gray-600">
+                      <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                      <p className="text-lg mb-2">No recent conversations</p>
+                      <p className="text-sm">Messages will appear here when clients contact you</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {conversations.map((c: any) => (
+                        <div key={c.peerId} className="p-3 border rounded-md flex justify-between items-center">
+                          <div>
+                            <div className="font-semibold">{c.peer?.name || c.peer?.email || c.peerId}</div>
+                            <div className="text-sm text-gray-600 truncate max-w-[60ch]">{c.lastMessage?.body}</div>
+                            {c.latestBooking && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {c.latestBooking.garageName ? (<span className="mr-2">Garage: {c.latestBooking.garageName}</span>) : null}
+                                <span>Booking: {new Date(c.latestBooking.startTime).toLocaleString()}</span>
+                              </div>
+                            )}
+                          </div>
+                          <Link
+                            href={`/chat?peer=${encodeURIComponent(c.peerId)}${c.latestBooking ? `&bookingId=${encodeURIComponent(c.latestBooking.id)}` : ''}&title=${encodeURIComponent('Chat with Client')}`}
+                            className="inline-flex items-center text-sm border rounded-md px-3 py-1"
+                          >
+                            <MessageSquare className="w-4 h-4 mr-1" /> Open
+                          </Link>
                         </div>
                       ))}
                     </div>

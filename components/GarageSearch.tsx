@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+// Modal extracted to its own component
+import BookingModal from '@/components/garage/BookingModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -55,9 +56,9 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
   const { user } = useAuth();
   const router = useRouter();
 
-  // Modal flow for unregistered user booking
+  // Booking flow (works for guests and logged-in users)
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [modalStep, setModalStep] = useState<'choice' | 'register' | 'verify'>('choice');
+  const [modalStep, setModalStep] = useState<'choice' | 'register' | 'verify' | 'slot'>('choice');
   const [pendingGarageId, setPendingGarageId] = useState<string | null>(null);
   // Register fields
   const [regName, setRegName] = useState('');
@@ -68,6 +69,11 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
   const [contactPhone, setContactPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Slot selection
+  const [slotStart, setSlotStart] = useState<Date | null>(null);
+  const [slotEnd, setSlotEnd] = useState<Date | null>(null);
+  // Temp user id after registration (before booking)
+  const [tempUserId, setTempUserId] = useState<string | null>(null);
 
   const services = [
     { id: 'oil_change', name: t('service.oil_change') },
@@ -115,7 +121,7 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
     }
   };
 
-  async function submitRegisterAndBook() {
+  async function submitRegister() {
     if (!pendingGarageId) return;
     if (!regName || !regEmail || !regPassword) {
       toast.error('Please fill name, email and password');
@@ -135,46 +141,18 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
         setSubmitting(false);
         return;
       }
-      // After registration, create booking with new user id
-      const startTime = new Date();
-      const endTime = new Date(Date.now() + 2 * 60 * 60 * 1000);
-      const resBk = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: data.user.id,
-          garageId: pendingGarageId,
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-        }),
-      });
-      const dataBk = await resBk.json();
-      if (!resBk.ok) {
-        toast.error(dataBk?.error || 'Failed to create booking');
-        setSubmitting(false);
-        return;
-      }
-      toast.success('Booking created');
-      setShowBookingModal(false);
-      setPendingGarageId(null);
-      // Redirect guest to chat with owner using returned ids
-      const clientUserId = dataBk.clientUserId;
-      const garageOwnerId = dataBk.garageOwnerId;
-      const bookingId = dataBk.booking?.id;
-      if (clientUserId && garageOwnerId) {
-        router.push(`/chat?peer=${encodeURIComponent(garageOwnerId)}&self=${encodeURIComponent(clientUserId)}${bookingId ? `&bookingId=${encodeURIComponent(bookingId)}` : ''}&title=${encodeURIComponent('Chat with Garage')}`);
-      } else {
-        router.push('/dashboard');
-      }
+      // Move to slot selection with temp user id
+      setTempUserId(data.user.id);
+      setModalStep('slot');
     } catch (e) {
-      console.error('register-and-book failed', e);
+      console.error('register failed', e);
       toast.error('Something went wrong');
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function submitVerifyAndBook() {
+  async function submitVerify() {
     if (!pendingGarageId) return;
     if (!contactEmail && !contactPhone) {
       toast.error('Provide email or phone');
@@ -184,21 +162,36 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
       toast.error('Invalid OTP. Use 1234');
       return;
     }
+    // proceed to slot selection for guests
+    setModalStep('slot');
+  }
+
+  async function confirmSlotBooking() {
+    if (!pendingGarageId) return;
+    if (!slotStart || !slotEnd) {
+      toast.error('Please select a time slot');
+      return;
+    }
     setSubmitting(true);
     try {
-      const startTime = new Date();
-      const endTime = new Date(Date.now() + 2 * 60 * 60 * 1000);
+      const payload: any = {
+        garageId: pendingGarageId,
+        startTime: slotStart.toISOString(),
+        endTime: slotEnd.toISOString(),
+      };
+      if (user?.id) {
+        payload.userId = user.id;
+      } else if (tempUserId) {
+        payload.userId = tempUserId;
+      } else {
+        payload.contactEmail = contactEmail || undefined;
+        payload.contactPhone = contactPhone || undefined;
+        payload.otp = otp;
+      }
       const res = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          garageId: pendingGarageId,
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-          contactEmail: contactEmail || undefined,
-          contactPhone: contactPhone || undefined,
-          otp,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -209,16 +202,12 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
       toast.success('Booking created');
       setShowBookingModal(false);
       setPendingGarageId(null);
-      const clientUserId = data.clientUserId;
-      const garageOwnerId = data.garageOwnerId;
-      const bookingId = data.booking?.id;
-      if (clientUserId && garageOwnerId) {
-        router.push(`/chat?peer=${encodeURIComponent(garageOwnerId)}&self=${encodeURIComponent(clientUserId)}${bookingId ? `&bookingId=${encodeURIComponent(bookingId)}` : ''}&title=${encodeURIComponent('Chat with Garage')}`);
-      } else {
-        router.push('/dashboard');
-      }
+      setTempUserId(null);
+      setSlotStart(null);
+      setSlotEnd(null);
+      router.push('/dashboard');
     } catch (e) {
-      console.error('verify-and-book failed', e);
+      console.error('confirm slot booking failed', e);
       toast.error('Failed to create booking');
     } finally {
       setSubmitting(false);
@@ -226,45 +215,14 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
   }
 
   const bookNow = async (garageId: string) => {
+    // Open slot selection (or choice for guests)
+    setPendingGarageId(garageId);
     if (!user) {
-      // Launch modal for Register vs Quick Verify
-      setPendingGarageId(garageId);
       setModalStep('choice');
-      setShowBookingModal(true);
-      return;
+    } else {
+      setModalStep('slot');
     }
-    try {
-      // Simple booking: now to now+2h as placeholder
-      const startTime = new Date();
-      const endTime = new Date(Date.now() + 2 * 60 * 60 * 1000);
-      const res = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.id,
-          garageId,
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data?.error || 'Failed to create booking');
-        return;
-      }
-      toast.success('Booking created');
-      // For logged-in users, optionally navigate to chat with the garage owner
-      const bookingId = data.booking?.id;
-      const garageOwnerId = data.garageOwnerId;
-      if (garageOwnerId) {
-        router.push(`/chat?peer=${encodeURIComponent(garageOwnerId)}${bookingId ? `&bookingId=${encodeURIComponent(bookingId)}` : ''}&title=${encodeURIComponent('Chat with Garage')}`);
-      } else {
-        router.push('/dashboard');
-      }
-    } catch (e) {
-      console.error('book now failed', e);
-      toast.error('Failed to create booking');
-    }
+    setShowBookingModal(true);
   };
 
   const toggleFavorite = async (garageId: string) => {
@@ -318,8 +276,8 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
             animate={{ opacity: 1, y: 0 }}
             className="mb-8"
           >
-            <Card className="border-0 shadow-md bg-white/80 backdrop-blur">
-              <CardContent className="p-4">
+            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
+              <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900">
@@ -346,18 +304,17 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
               <CardContent className="p-6">
                 <div className="flex flex-col md:flex-row gap-4 items-end">
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Postal Code
                     </label>
                     <Input
                       placeholder="Enter postal code"
                       value={postalCode}
                       onChange={(e) => setPostalCode(e.target.value)}
-                      className="h-9 text-sm"
                     />
                   </div>
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Service (Optional)
                     </label>
                     <Select value={selectedService} onValueChange={(val) => setSelectedService(val)} disabled={services.length === 0}>
@@ -378,13 +335,12 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
                     </Select>
                   </div>
                   <div className="flex gap-2">
-                    <Button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700 h-9 px-3 text-sm">
+                    <Button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700">
                       {t('common.search')}
                     </Button>
                     <Button 
                       variant="outline" 
                       onClick={() => setViewMode(viewMode === 'list' ? 'compare' : 'list')}
-                      className="h-9 px-3 text-sm"
                     >
                       {viewMode === 'list' ? 'Compare' : 'List View'}
                     </Button>
@@ -415,10 +371,10 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 * index }}
                   >
-                    <Card className="border-0 shadow-md hover:shadow-lg transition-all duration-200 bg-white/80 backdrop-blur">
-                      <CardContent className="p-4">
+                    <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white/80 backdrop-blur">
+                      <CardContent className="p-6">
                         <div className="flex flex-col md:flex-row gap-6">
-                          <div className="w-full md:w-40 h-24 rounded-lg overflow-hidden">
+                          <div className="w-full md:w-48 h-32 rounded-lg overflow-hidden">
                             <img
                               src={garage.image}
                               alt={garage.name}
@@ -427,39 +383,39 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
                           </div>
                           
                           <div className="flex-1">
-                            <div className="flex justify-between items-start mb-3">
+                            <div className="flex justify-between items-start mb-4">
                               <div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                                <h3 className="text-xl font-bold text-gray-900 mb-1">
                                   {garage.name}
                                 </h3>
-                                <div className="flex items-center text-gray-600 mb-1 text-sm">
-                                  <MapPin className="w-3 h-3 mr-1" />
+                                <div className="flex items-center text-gray-600 mb-2">
+                                  <MapPin className="w-4 h-4 mr-1" />
                                   {garage.location}
                                 </div>
-                                <div className="flex items-center mb-1 text-sm">
-                                  <Star className="w-3 h-3 text-yellow-400 mr-1" />
-                                  <span className="font-medium">{garage.rating}</span>
+                                <div className="flex items-center mb-2">
+                                  <Star className="w-4 h-4 text-yellow-400 mr-1" />
+                                  <span className="font-semibold">{garage.rating}</span>
                                   <span className="text-gray-600 ml-1">({garage.reviews} reviews)</span>
                                 </div>
                               </div>
                               
-                              <Button className="bg-blue-600 hover:bg-blue-700 h-9 px-3 text-sm" onClick={() => bookNow(garage.id)}>
+                              <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => bookNow(garage.id)}>
                                 Book Now
                               </Button>
-                              <Button variant="outline" className="ml-2 h-9 px-3 text-sm" onClick={() => toggleFavorite(garage.id)}>
+                              <Button variant="outline" className="ml-2" onClick={() => toggleFavorite(garage.id)}>
                                 Save
                               </Button>
                             </div>
                             
-                            <div className="grid md:grid-cols-2 gap-3">
+                            <div className="grid md:grid-cols-2 gap-4">
                               <div>
-                                <p className="text-xs font-medium text-gray-700 mb-1">Services & Prices</p>
+                                <p className="text-sm font-medium text-gray-700 mb-2">Services & Prices</p>
                                 <div className="space-y-1">
                                   {garage.services.map((serviceId) => {
                                     const service = services.find(s => s.id === serviceId);
                                     const price = garage.prices[serviceId];
                                     return (
-                                      <div key={serviceId} className="flex justify-between text-xs">
+                                      <div key={serviceId} className="flex justify-between text-sm">
                                         <span>{service?.name}</span>
                                         {price && <span className="font-semibold">€{price}</span>}
                                       </div>
@@ -469,8 +425,8 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
                               </div>
                               
                               <div>
-                                <p className="text-xs font-medium text-gray-700 mb-1">Contact & Hours</p>
-                                <div className="space-y-1 text-xs text-gray-600">
+                                <p className="text-sm font-medium text-gray-700 mb-2">Contact & Hours</p>
+                                <div className="space-y-1 text-sm text-gray-600">
                                   <div className="flex items-center">
                                     <Phone className="w-3 h-3 mr-1" />
                                     {garage.phone}
@@ -536,85 +492,17 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
         setContactPhone={setContactPhone}
         otp={otp}
         setOtp={setOtp}
-        onRegister={submitRegisterAndBook}
-        onVerify={submitVerifyAndBook}
+        onRegister={submitRegister}
+        onVerify={submitVerify}
+        slotStart={slotStart}
+        setSlotStart={setSlotStart}
+        slotEnd={slotEnd}
+        setSlotEnd={setSlotEnd}
+        onConfirmSlot={confirmSlotBooking}
         submitting={submitting}
       />
     </div>
   );
+}
 
-function BookingModal({
-  open,
-  onOpenChange,
-  step,
-  setStep,
-  regName,
-  setRegName,
-  regEmail,
-  setRegEmail,
-  regPassword,
-  setRegPassword,
-  contactEmail,
-  setContactEmail,
-  contactPhone,
-  setContactPhone,
-  otp,
-  setOtp,
-  onRegister,
-  onVerify,
-  submitting,
-}: any) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        {step === 'choice' && (
-          <div>
-            <DialogHeader>
-              <DialogTitle>Continue Booking</DialogTitle>
-            </DialogHeader>
-            <p className="text-sm text-gray-600 mt-2">You are not logged in. Choose an option to continue:</p>
-            <div className="mt-4 flex flex-col gap-3">
-              <Button onClick={() => setStep('register')} className="w-full">Register an Account</Button>
-              <Button variant="outline" onClick={() => setStep('verify')} className="w-full">Quick Verify (OTP)</Button>
-            </div>
-          </div>
-        )}
-        {step === 'register' && (
-          <div>
-            <DialogHeader>
-              <DialogTitle>Register to Book</DialogTitle>
-            </DialogHeader>
-            <div className="mt-4 space-y-3">
-              <Input placeholder="Full Name" value={regName} onChange={(e) => setRegName(e.target.value)} />
-              <Input placeholder="Email" type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
-              <Input placeholder="Password" type="password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} />
-              <div className="flex gap-2 justify-end pt-2">
-                <Button variant="outline" onClick={() => setStep('choice')}>Back</Button>
-                <Button onClick={onRegister} disabled={submitting}>{submitting ? 'Submitting...' : 'Register & Book'}</Button>
-              </div>
-            </div>
-          </div>
-        )}
-        {step === 'verify' && (
-          <div>
-            <DialogHeader>
-              <DialogTitle>Quick Verify</DialogTitle>
-            </DialogHeader>
-            <p className="text-sm text-gray-600 mt-2">Enter your email or phone, and OTP 1234 to continue.</p>
-            <div className="mt-4 space-y-3">
-              <Input placeholder="Email (optional)" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
-              <Input placeholder="Phone (optional)" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
-              <Input placeholder="OTP (use 1234)" value={otp} onChange={(e) => setOtp(e.target.value)} />
-              <div className="flex gap-2 justify-end pt-2">
-                <Button variant="outline" onClick={() => setStep('choice')}>Back</Button>
-                <Button onClick={onVerify} disabled={submitting}>{submitting ? 'Submitting...' : 'Verify & Book'}</Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-}
 export default GarageSearch;
