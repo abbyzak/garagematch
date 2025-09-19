@@ -296,8 +296,8 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
             animate={{ opacity: 1, y: 0 }}
             className="mb-8"
           >
-            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
-              <CardContent className="p-6">
+            <Card className="border-0 shadow-md bg-white/80 backdrop-blur">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900">
@@ -324,17 +324,18 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
               <CardContent className="p-6">
                 <div className="flex flex-col md:flex-row gap-4 items-end">
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       Postal Code
                     </label>
                     <Input
                       placeholder="Enter postal code"
                       value={postalCode}
                       onChange={(e) => setPostalCode(e.target.value)}
+                      className="h-9 text-sm"
                     />
                   </div>
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       Service (Optional)
                     </label>
                     <Select value={selectedService} onValueChange={(val) => setSelectedService(val)} disabled={services.length === 0}>
@@ -355,12 +356,13 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
                     </Select>
                   </div>
                   <div className="flex gap-2">
-                    <Button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700">
+                    <Button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700 h-9 px-3 text-sm">
                       {t('common.search')}
                     </Button>
                     <Button 
                       variant="outline" 
                       onClick={() => setViewMode(viewMode === 'list' ? 'compare' : 'list')}
+                      className="h-9 px-3 text-sm"
                     >
                       {viewMode === 'list' ? 'Compare' : 'List View'}
                     </Button>
@@ -391,10 +393,10 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 * index }}
                   >
-                    <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white/80 backdrop-blur">
-                      <CardContent className="p-6">
+                    <Card className="border-0 shadow-md hover:shadow-lg transition-all duration-200 bg-white/80 backdrop-blur">
+                      <CardContent className="p-4">
                         <div className="flex flex-col md:flex-row gap-6">
-                          <div className="w-full md:w-48 h-32 rounded-lg overflow-hidden">
+                          <div className="w-full md:w-40 h-24 rounded-lg overflow-hidden">
                             <img
                               src={garage.image}
                               alt={garage.name}
@@ -403,39 +405,39 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
                           </div>
                           
                           <div className="flex-1">
-                            <div className="flex justify-between items-start mb-4">
+                            <div className="flex justify-between items-start mb-3">
                               <div>
-                                <h3 className="text-xl font-bold text-gray-900 mb-1">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-1">
                                   {garage.name}
                                 </h3>
-                                <div className="flex items-center text-gray-600 mb-2">
-                                  <MapPin className="w-4 h-4 mr-1" />
+                                <div className="flex items-center text-gray-600 mb-1 text-sm">
+                                  <MapPin className="w-3 h-3 mr-1" />
                                   {garage.location}
                                 </div>
-                                <div className="flex items-center mb-2">
-                                  <Star className="w-4 h-4 text-yellow-400 mr-1" />
-                                  <span className="font-semibold">{garage.rating}</span>
+                                <div className="flex items-center mb-1 text-sm">
+                                  <Star className="w-3 h-3 text-yellow-400 mr-1" />
+                                  <span className="font-medium">{garage.rating}</span>
                                   <span className="text-gray-600 ml-1">({garage.reviews} reviews)</span>
                                 </div>
                               </div>
                               
-                              <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => bookNow(garage.id)}>
+                              <Button className="bg-blue-600 hover:bg-blue-700 h-9 px-3 text-sm" onClick={() => bookNow(garage.id)}>
                                 Book Now
                               </Button>
-                              <Button variant="outline" className="ml-2" onClick={() => toggleFavorite(garage.id)}>
+                              <Button variant="outline" className="ml-2 h-9 px-3 text-sm" onClick={() => toggleFavorite(garage.id)}>
                                 Save
                               </Button>
                             </div>
                             
-                            <div className="grid md:grid-cols-2 gap-4">
+                            <div className="grid md:grid-cols-2 gap-3">
                               <div>
-                                <p className="text-sm font-medium text-gray-700 mb-2">Services & Prices</p>
+                                <p className="text-xs font-medium text-gray-700 mb-1">Services & Prices</p>
                                 <div className="space-y-1">
                                   {garage.services.map((serviceId) => {
                                     const service = services.find(s => s.id === serviceId);
                                     const price = garage.prices[serviceId];
                                     return (
-                                      <div key={serviceId} className="flex justify-between text-sm">
+                                      <div key={serviceId} className="flex justify-between text-xs">
                                         <span>{service?.name}</span>
                                         {price && <span className="font-semibold">€{price}</span>}
                                       </div>
@@ -445,8 +447,8 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
                               </div>
                               
                               <div>
-                                <p className="text-sm font-medium text-gray-700 mb-2">Contact & Hours</p>
-                                <div className="space-y-1 text-sm text-gray-600">
+                                <p className="text-xs font-medium text-gray-700 mb-1">Contact & Hours</p>
+                                <div className="space-y-1 text-xs text-gray-600">
                                   <div className="flex items-center">
                                     <Phone className="w-3 h-3 mr-1" />
                                     {garage.phone}
@@ -519,7 +521,7 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
     </div>
   );
 
-export function BookingModal({
+function BookingModal({
   open,
   onOpenChange,
   step,
@@ -592,3 +594,5 @@ export function BookingModal({
     </Dialog>
   );
 }
+}
+export default GarageSearch;
