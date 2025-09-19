@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -54,6 +55,20 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
   const { user } = useAuth();
   const router = useRouter();
 
+  // Modal flow for unregistered user booking
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [modalStep, setModalStep] = useState<'choice' | 'register' | 'verify'>('choice');
+  const [pendingGarageId, setPendingGarageId] = useState<string | null>(null);
+  // Register fields
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  // Quick verify fields
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
   const services = [
     { id: 'oil_change', name: t('service.oil_change') },
     { id: 'brake_service', name: t('service.brake_service') },
@@ -100,9 +115,107 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
     }
   };
 
+  async function submitRegisterAndBook() {
+    if (!pendingGarageId) return;
+    if (!regName || !regEmail || !regPassword) {
+      toast.error('Please fill name, email and password');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      // Register as client
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: regEmail, password: regPassword, name: regName, role: 'client' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data?.error || 'Registration failed');
+        setSubmitting(false);
+        return;
+      }
+      // After registration, create booking with new user id
+      const startTime = new Date();
+      const endTime = new Date(Date.now() + 2 * 60 * 60 * 1000);
+      const resBk = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: data.user.id,
+          garageId: pendingGarageId,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+        }),
+      });
+      const dataBk = await resBk.json();
+      if (!resBk.ok) {
+        toast.error(dataBk?.error || 'Failed to create booking');
+        setSubmitting(false);
+        return;
+      }
+      toast.success('Booking created');
+      setShowBookingModal(false);
+      setPendingGarageId(null);
+      router.push('/dashboard');
+    } catch (e) {
+      console.error('register-and-book failed', e);
+      toast.error('Something went wrong');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitVerifyAndBook() {
+    if (!pendingGarageId) return;
+    if (!contactEmail && !contactPhone) {
+      toast.error('Provide email or phone');
+      return;
+    }
+    if (otp !== '1234') {
+      toast.error('Invalid OTP. Use 1234');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const startTime = new Date();
+      const endTime = new Date(Date.now() + 2 * 60 * 60 * 1000);
+      const res = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          garageId: pendingGarageId,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          contactEmail: contactEmail || undefined,
+          contactPhone: contactPhone || undefined,
+          otp,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data?.error || 'Failed to create booking');
+        setSubmitting(false);
+        return;
+      }
+      toast.success('Booking created');
+      setShowBookingModal(false);
+      setPendingGarageId(null);
+      router.push('/dashboard');
+    } catch (e) {
+      console.error('verify-and-book failed', e);
+      toast.error('Failed to create booking');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const bookNow = async (garageId: string) => {
     if (!user) {
-      toast.error('Please login to book');
+      // Launch modal for Register vs Quick Verify
+      setPendingGarageId(garageId);
+      setModalStep('choice');
+      setShowBookingModal(true);
       return;
     }
     try {
@@ -381,6 +494,101 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
           )}
         </div>
       </div>
+
+      <BookingModal
+        open={showBookingModal}
+        onOpenChange={setShowBookingModal}
+        step={modalStep}
+        setStep={setModalStep}
+        regName={regName}
+        setRegName={setRegName}
+        regEmail={regEmail}
+        setRegEmail={setRegEmail}
+        regPassword={regPassword}
+        setRegPassword={setRegPassword}
+        contactEmail={contactEmail}
+        setContactEmail={setContactEmail}
+        contactPhone={contactPhone}
+        setContactPhone={setContactPhone}
+        otp={otp}
+        setOtp={setOtp}
+        onRegister={submitRegisterAndBook}
+        onVerify={submitVerifyAndBook}
+        submitting={submitting}
+      />
     </div>
+  );
+
+export function BookingModal({
+  open,
+  onOpenChange,
+  step,
+  setStep,
+  regName,
+  setRegName,
+  regEmail,
+  setRegEmail,
+  regPassword,
+  setRegPassword,
+  contactEmail,
+  setContactEmail,
+  contactPhone,
+  setContactPhone,
+  otp,
+  setOtp,
+  onRegister,
+  onVerify,
+  submitting,
+}: any) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        {step === 'choice' && (
+          <div>
+            <DialogHeader>
+              <DialogTitle>Continue Booking</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-gray-600 mt-2">You are not logged in. Choose an option to continue:</p>
+            <div className="mt-4 flex flex-col gap-3">
+              <Button onClick={() => setStep('register')} className="w-full">Register an Account</Button>
+              <Button variant="outline" onClick={() => setStep('verify')} className="w-full">Quick Verify (OTP)</Button>
+            </div>
+          </div>
+        )}
+        {step === 'register' && (
+          <div>
+            <DialogHeader>
+              <DialogTitle>Register to Book</DialogTitle>
+            </DialogHeader>
+            <div className="mt-4 space-y-3">
+              <Input placeholder="Full Name" value={regName} onChange={(e) => setRegName(e.target.value)} />
+              <Input placeholder="Email" type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
+              <Input placeholder="Password" type="password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} />
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setStep('choice')}>Back</Button>
+                <Button onClick={onRegister} disabled={submitting}>{submitting ? 'Submitting...' : 'Register & Book'}</Button>
+              </div>
+            </div>
+          </div>
+        )}
+        {step === 'verify' && (
+          <div>
+            <DialogHeader>
+              <DialogTitle>Quick Verify</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-gray-600 mt-2">Enter your email or phone, and OTP 1234 to continue.</p>
+            <div className="mt-4 space-y-3">
+              <Input placeholder="Email (optional)" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
+              <Input placeholder="Phone (optional)" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
+              <Input placeholder="OTP (use 1234)" value={otp} onChange={(e) => setOtp(e.target.value)} />
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setStep('choice')}>Back</Button>
+                <Button onClick={onVerify} disabled={submitting}>{submitting ? 'Submitting...' : 'Verify & Book'}</Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

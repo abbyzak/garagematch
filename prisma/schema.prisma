@@ -100,17 +100,20 @@ model GaragePhoto {
 model Booking {
   id         String        @id @default(cuid()) @db.VarChar(191)
   garageId   String        @db.VarChar(191)
-  userId     String        @db.VarChar(191)
+  userId     String?       @db.VarChar(191)
   startTime  DateTime
   endTime    DateTime
   status     BookingStatus @default(PENDING)
   totalPrice Decimal?      @db.Decimal(10,2)
   notes      String?       @db.Text
+  // Guest booking contact (for non-registered users)
+  contactEmail String?     @db.VarChar(191)
+  contactPhone String?     @db.VarChar(64)
   createdAt  DateTime      @default(now()) @db.Timestamp(6)
   updatedAt  DateTime      @updatedAt @db.Timestamp(6)
 
   garage Garage @relation(fields: [garageId], references: [id])
-  user   User   @relation(fields: [userId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
 
   @@index([garageId])
   @@index([userId])
