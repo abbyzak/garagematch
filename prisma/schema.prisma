@@ -88,7 +88,13 @@ model Garage {
 model GaragePhoto {
   id        String   @id @default(cuid()) @db.VarChar(191)
   garageId  String   @db.VarChar(191)
-  url       String   @db.Text
+  url       String?  @db.Text
+  // Optional embedded image storage (compressed)
+  data      Bytes?
+  mimeType  String?  @db.VarChar(64)
+  width     Int?
+  height    Int?
+  size      Int?     // bytes
   isPrimary Boolean  @default(false)
   createdAt DateTime @default(now()) @db.Timestamp(6)
 

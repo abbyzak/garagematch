@@ -47,7 +47,11 @@ export async function GET(req: NextRequest) {
     })
     const stats = new Map(grouped.map(g => [g.garageId, { rating: g._avg.rating || 0, reviews: g._count.rating }]))
 
-    const data = items.map(g => ({
+    const data = items.map(g => {
+      const primary = g.photos.find(p => p.isPrimary) || g.photos[0]
+      const p: any = primary as any
+      const imageUrl = primary ? (p?.data ? `/api/photos/${p.id}` : ((p?.url as string) || '')) : ''
+      return {
       id: g.id,
       name: g.name,
       description: g.description,
@@ -59,13 +63,13 @@ export async function GET(req: NextRequest) {
       phone: null,
       email: null,
       workingHours: null,
-      image: g.photos.find(p => p.isPrimary)?.url || g.photos[0]?.url || '',
+      image: imageUrl,
       rating: stats.get(g.id)?.rating || 0,
       reviews: stats.get(g.id)?.reviews || 0,
       services: [],
       prices: {},
       location: [g.addressLine1, g.city].filter(Boolean).join(', '),
-    }))
+    }})
 
     return NextResponse.json({ items: data, total })
   } catch (e) {
