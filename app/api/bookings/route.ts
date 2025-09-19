@@ -96,6 +96,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Lookup garage owner for response convenience
+    const garage = await prisma.garage.findUnique({ where: { id: garageId }, select: { ownerId: true } })
+
     const data: any = {
       garageId,
       startTime,
@@ -111,7 +114,7 @@ export async function POST(req: NextRequest) {
       data,
     })
 
-    return NextResponse.json({ booking: created, clientUserId: resolvedUserId }, { status: 201 })
+    return NextResponse.json({ booking: created, clientUserId: resolvedUserId, garageOwnerId: garage?.ownerId || null }, { status: 201 })
   } catch (e) {
     console.error('BOOKINGS POST error', e)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -9,6 +9,8 @@ type ChatWindowProps = {
   selfUserId: string;
   peerUserId: string;
   title?: string;
+  banner?: { garageName?: string | null; startTime?: number | null } | null;
+  ownerGarageId?: string | null; // enables image upload for owners
 };
 
 type Message = {
@@ -20,13 +22,14 @@ type Message = {
   createdAt: number;
 };
 
-export function ChatWindow({ selfUserId, peerUserId, title }: ChatWindowProps) {
+export function ChatWindow({ selfUserId, peerUserId, title, banner, ownerGarageId }: ChatWindowProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [since, setSince] = useState(0);
   const [loading, setLoading] = useState(false);
   const pollRef = useRef<number | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const [file, setFile] = useState<File | null>(null);
 
   const canChat = useMemo(() => selfUserId && peerUserId && selfUserId !== peerUserId, [selfUserId, peerUserId]);
 
@@ -100,10 +103,42 @@ export function ChatWindow({ selfUserId, peerUserId, title }: ChatWindowProps) {
     }
   };
 
+  const sendImage = async () => {
+    if (!file || !ownerGarageId) return;
+    setLoading(true);
+    try {
+      const fd = new FormData();
+      fd.set('garageId', ownerGarageId);
+      fd.set('isPrimary', 'false');
+      fd.set('file', file);
+      const up = await fetch('/api/photos', { method: 'POST', body: fd });
+      const j = await up.json();
+      if (up.ok && j?.photo?.id) {
+        const url = `/api/photos/${j.photo.id}`;
+        await fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fromUserId: selfUserId, toUserId: peerUserId, body: url }),
+        });
+        setFile(null);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <Card className="border-0 shadow-lg bg-white/80 backdrop-blur h-full">
       <CardHeader>
         <CardTitle>{title || 'Chat'}</CardTitle>
+        {banner && (
+          <div className="text-xs text-gray-500 mt-1">
+            {banner.garageName && <span className="mr-2">Garage: <span className="font-medium">{banner.garageName}</span></span>}
+            {banner.startTime && <span>Booking: {new Date(banner.startTime).toLocaleString()}</span>}
+          </div>
+        )}
       </CardHeader>
       <CardContent className="flex flex-col h-[500px]">
         <div ref={listRef} className="flex-1 overflow-y-auto space-y-2 p-2">
@@ -114,13 +149,24 @@ export function ChatWindow({ selfUserId, peerUserId, title }: ChatWindowProps) {
           ) : (
             messages.map((m) => (
               <div key={m.id} className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${m.fromUserId === selfUserId ? 'ml-auto bg-blue-600 text-white' : 'mr-auto bg-gray-100 text-gray-900'}`}>
-                <div>{m.body}</div>
+                {m.body.startsWith('/api/photos/') ? (
+                  <img src={m.body} alt="attachment" className="rounded max-w-full" />
+                ) : (
+                  <div>{m.body}</div>
+                )}
                 <div className="text-[10px] opacity-70 mt-1 text-right">{new Date(m.createdAt).toLocaleTimeString()}</div>
               </div>
             ))
           )}
         </div>
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex flex-col gap-2">
+          {ownerGarageId && (
+            <div className="flex items-center gap-2">
+              <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              <Button onClick={sendImage} disabled={!file || loading} variant="outline">Send Image</Button>
+            </div>
+          )}
+          <div className="flex gap-2">
           <Input
             placeholder="Type a message"
             value={input}
@@ -131,6 +177,7 @@ export function ChatWindow({ selfUserId, peerUserId, title }: ChatWindowProps) {
           <Button onClick={send} disabled={!canChat || loading || !input.trim()} className="bg-blue-600 hover:bg-blue-700">
             Send
           </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

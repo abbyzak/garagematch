@@ -157,7 +157,15 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
       toast.success('Booking created');
       setShowBookingModal(false);
       setPendingGarageId(null);
-      router.push('/dashboard');
+      // Redirect guest to chat with owner using returned ids
+      const clientUserId = dataBk.clientUserId;
+      const garageOwnerId = dataBk.garageOwnerId;
+      const bookingId = dataBk.booking?.id;
+      if (clientUserId && garageOwnerId) {
+        router.push(`/chat?peer=${encodeURIComponent(garageOwnerId)}&self=${encodeURIComponent(clientUserId)}${bookingId ? `&bookingId=${encodeURIComponent(bookingId)}` : ''}&title=${encodeURIComponent('Chat with Garage')}`);
+      } else {
+        router.push('/dashboard');
+      }
     } catch (e) {
       console.error('register-and-book failed', e);
       toast.error('Something went wrong');
@@ -201,7 +209,14 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
       toast.success('Booking created');
       setShowBookingModal(false);
       setPendingGarageId(null);
-      router.push('/dashboard');
+      const clientUserId = data.clientUserId;
+      const garageOwnerId = data.garageOwnerId;
+      const bookingId = data.booking?.id;
+      if (clientUserId && garageOwnerId) {
+        router.push(`/chat?peer=${encodeURIComponent(garageOwnerId)}&self=${encodeURIComponent(clientUserId)}${bookingId ? `&bookingId=${encodeURIComponent(bookingId)}` : ''}&title=${encodeURIComponent('Chat with Garage')}`);
+      } else {
+        router.push('/dashboard');
+      }
     } catch (e) {
       console.error('verify-and-book failed', e);
       toast.error('Failed to create booking');
@@ -238,7 +253,14 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
         return;
       }
       toast.success('Booking created');
-      router.push('/dashboard');
+      // For logged-in users, optionally navigate to chat with the garage owner
+      const bookingId = data.booking?.id;
+      const garageOwnerId = data.garageOwnerId;
+      if (garageOwnerId) {
+        router.push(`/chat?peer=${encodeURIComponent(garageOwnerId)}${bookingId ? `&bookingId=${encodeURIComponent(bookingId)}` : ''}&title=${encodeURIComponent('Chat with Garage')}`);
+      } else {
+        router.push('/dashboard');
+      }
     } catch (e) {
       console.error('book now failed', e);
       toast.error('Failed to create booking');
