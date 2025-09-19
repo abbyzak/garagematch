@@ -35,6 +35,7 @@ interface Booking {
   id: string;
   clientName: string;
   clientEmail: string;
+  clientUserId?: string;
   vehicle: string;
   service: string;
   date: string;
@@ -132,8 +133,9 @@ export function GarageOwnerDashboard() {
         if (res.ok) {
           const mapped: Booking[] = (json.items || []).map((bk: any) => ({
             id: bk.id,
-            clientName: bk.user?.name || bk.userId,
+            clientName: bk.user?.name || bk.userId || 'Guest',
             clientEmail: bk.user?.email || '',
+            clientUserId: bk.user?.id || bk.userId || '',
             vehicle: 'Vehicle',
             service: 'Service',
             date: new Date(bk.startTime).toISOString().split('T')[0],
@@ -551,24 +553,34 @@ export function GarageOwnerDashboard() {
                             </div>
                           </div>
                           
-                          {booking.status === 'pending' && (
-                            <div className="flex gap-2">
-                              <Button 
-                                size="sm" 
-                                className="bg-green-600 hover:bg-green-700"
-                                onClick={() => handleBookingAction(booking.id, 'accept')}
+                          <div className="flex gap-2">
+                            {booking.status === 'pending' && (
+                              <>
+                                <Button 
+                                  size="sm" 
+                                  className="bg-green-600 hover:bg-green-700"
+                                  onClick={() => handleBookingAction(booking.id, 'accept')}
+                                >
+                                  Accept
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => handleBookingAction(booking.id, 'decline')}
+                                >
+                                  Decline
+                                </Button>
+                              </>
+                            )}
+                            {booking.clientUserId && (
+                              <Link
+                                href={`/chat?peer=${encodeURIComponent(booking.clientUserId)}&title=${encodeURIComponent('Chat with Client')}`}
+                                className="inline-flex items-center text-sm border rounded-md px-3 py-1"
                               >
-                                Accept
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => handleBookingAction(booking.id, 'decline')}
-                              >
-                                Decline
-                              </Button>
-                            </div>
-                          )}
+                                <MessageSquare className="w-4 h-4 mr-1" /> Start Chat
+                              </Link>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>

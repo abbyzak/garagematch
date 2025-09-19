@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
     // 1) Authenticated: userId present
     // 2) Guest: no userId, must supply contactEmail or contactPhone AND correct OTP (1234)
     let guestData: { contactEmail?: string | null; contactPhone?: string | null } = {}
+    let resolvedUserId: string | null = userId || null
     if (!userId) {
       const hasContact = Boolean(contactEmail || contactPhone)
       const otpValid = otp === '1234'
@@ -59,6 +60,40 @@ export async function POST(req: NextRequest) {
         contactEmail: contactEmail || null,
         contactPhone: contactPhone || null,
       }
+
+      // Create or reuse a minimal user for chat capability
+      // Prefer email for identification
+      const identifierEmail = contactEmail || ''
+      try {
+        if (identifierEmail) {
+          const existing = await prisma.user.findUnique({ where: { email: identifierEmail } })
+          if (existing) {
+            resolvedUserId = existing.id
+          } else {
+            const created = await prisma.user.create({
+              data: {
+                email: identifierEmail,
+                password: 'guest',
+                name: 'Guest User',
+              },
+            })
+            resolvedUserId = created.id
+          }
+        } else if (contactPhone) {
+          // Fallback: create a synthetic email to satisfy unique constraint
+          const synth = `guest+${Date.now()}@example.com`
+          const created = await prisma.user.create({
+            data: {
+              email: synth,
+              password: 'guest',
+              name: 'Guest User',
+            },
+          })
+          resolvedUserId = created.id
+        }
+      } catch (e) {
+        console.error('Guest user resolve/create failed', e)
+      }
     }
 
     const data: any = {
@@ -70,13 +105,13 @@ export async function POST(req: NextRequest) {
       notes: b?.notes || null,
       ...guestData,
     }
-    if (userId) data.userId = userId
+    if (resolvedUserId) data.userId = resolvedUserId
 
     const created = await prisma.booking.create({
       data,
     })
 
-    return NextResponse.json({ booking: created }, { status: 201 })
+    return NextResponse.json({ booking: created, clientUserId: resolvedUserId }, { status: 201 })
   } catch (e) {
     console.error('BOOKINGS POST error', e)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
