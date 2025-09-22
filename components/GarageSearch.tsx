@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft, MapPin, Star, Clock, Euro, Phone, Mail } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Navbar } from '@/components/Navbar';
+import MiniMap from '@/components/map/MiniMap';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -424,7 +425,7 @@ export function GarageSearch({ vehicleData, onBack, initialService, initialPosta
             </Card>
           </motion.div>
 
-          {/* Map preview */}
+          {/* Map preview (Leaflet + OSM tiles) */}
           {userCoord && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -435,29 +436,12 @@ export function GarageSearch({ vehicleData, onBack, initialService, initialPosta
               <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-800">Area map (Netherlands)</h3>
+                    <h3 className="text-sm font-semibold text-gray-800">Area map (OpenStreetMap)</h3>
                     <span className="text-xs text-gray-500">Centered on {postalCode}</span>
                   </div>
-                  {(() => {
-                    const markers: string[] = []
-                    const limited = garages.filter(g => typeof g.lat === 'number' && typeof g.lon === 'number').slice(0, 10)
-                    for (const g of limited) {
-                      markers.push(`${g.lat},${g.lon},lightblue1`)
-                    }
-                    const url = new URL('https://staticmap.openstreetmap.de/staticmap.php')
-                    url.searchParams.set('center', `${userCoord.lat},${userCoord.lon}`)
-                    url.searchParams.set('zoom', '11')
-                    url.searchParams.set('size', '640x320')
-                    if (markers.length) url.searchParams.set('markers', markers.join('|'))
-                    const mapUrl = url.toString()
-                    return (
-                      <img
-                        src={mapUrl}
-                        alt={`Map around ${postalCode}`}
-                        className="w-full h-64 object-cover rounded-md border"
-                      />
-                    )
-                  })()}
+                  <div className="w-full h-64 rounded-md overflow-hidden border">
+                    <MiniMap center={userCoord} garages={garages} />
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>

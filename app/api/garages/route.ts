@@ -37,15 +37,22 @@ export async function GET(req: NextRequest) {
       prisma.garage.count({ where }),
     ])
 
+    if (items.length === 0) {
+      return NextResponse.json({ items: [], total: 0 })
+    }
+
     // Hydrate rating and reviews count from Review model
     const garageIds = items.map(g => g.id)
-    const grouped = await prisma.review.groupBy({
-      by: ['garageId'],
-      where: { garageId: { in: garageIds } },
-      _avg: { rating: true },
-      _count: { rating: true },
-    })
-    const stats = new Map(grouped.map(g => [g.garageId, { rating: g._avg.rating || 0, reviews: g._count.rating }]))
+    let stats = new Map<string, { rating: number; reviews: number }>()
+    if (garageIds.length > 0) {
+      const grouped = await prisma.review.groupBy({
+        by: ['garageId'],
+        where: { garageId: { in: garageIds } },
+        _avg: { rating: true },
+        _count: { rating: true },
+      })
+      stats = new Map(grouped.map(g => [g.garageId, { rating: g._avg.rating || 0, reviews: g._count.rating }]))
+    }
 
     const data = items.map(g => {
       const primary = g.photos.find(p => p.isPrimary) || g.photos[0]
