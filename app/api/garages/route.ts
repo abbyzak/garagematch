@@ -81,7 +81,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items: data, total })
   } catch (e) {
     console.error('GARAGES GET error', e)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    // In demo/staging environments where DB may be absent, do not hard-fail the client UI
+    return NextResponse.json({ items: [], total: 0, warning: 'garages unavailable' })
   }
 }
 
