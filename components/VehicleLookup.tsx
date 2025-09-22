@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Car, Calendar, Fuel, Gauge } from 'lucide-react';
@@ -30,6 +31,7 @@ export function VehicleLookup({ licensePlate, onBack }: VehicleLookupProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showGarageSearch, setShowGarageSearch] = useState(false);
+  const [selectedService, setSelectedService] = useState<string | undefined>(undefined);
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -71,7 +73,13 @@ export function VehicleLookup({ licensePlate, onBack }: VehicleLookupProps) {
   };
 
   if (showGarageSearch && vehicleData) {
-    return <GarageSearch vehicleData={vehicleData} onBack={() => setShowGarageSearch(false)} />;
+    return (
+      <GarageSearch
+        vehicleData={vehicleData}
+        onBack={() => setShowGarageSearch(false)}
+        initialService={selectedService}
+      />
+    );
   }
 
   return (
@@ -178,11 +186,29 @@ export function VehicleLookup({ licensePlate, onBack }: VehicleLookupProps) {
                       </div>
                     </div>
 
+                    {/* Service Selection */}
+                    <div className="mt-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Service type</label>
+                      <Select value={selectedService} onValueChange={(v) => setSelectedService(v)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a service" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="oil_change">{t('service.oil_change')}</SelectItem>
+                          <SelectItem value="brake_service">{t('service.brake_service')}</SelectItem>
+                          <SelectItem value="tire_service">{t('service.tire_service')}</SelectItem>
+                          <SelectItem value="battery_service">{t('service.battery_service')}</SelectItem>
+                          <SelectItem value="engine_diagnostic">{t('service.engine_diagnostic')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
                     <div className="text-center pt-6">
                       <Button 
                         onClick={() => setShowGarageSearch(true)}
                         size="lg"
                         className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                        disabled={!selectedService}
                       >
                         {t('vehicle.continue')}
                       </Button>

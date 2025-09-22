@@ -39,16 +39,22 @@ interface Garage {
   phone: string;
   email: string;
   workingHours: string;
+  lat?: number;
+  lon?: number;
+  distanceKm?: number;
 }
 
 interface GarageSearchProps {
   vehicleData: VehicleData;
   onBack: () => void;
+  initialService?: string;
+  initialPostalCode?: string;
+  autoSearch?: boolean;
 }
 
-export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
-  const [postalCode, setPostalCode] = useState('');
-  const [selectedService, setSelectedService] = useState<string | undefined>(undefined);
+export function GarageSearch({ vehicleData, onBack, initialService, initialPostalCode, autoSearch }: GarageSearchProps) {
+  const [postalCode, setPostalCode] = useState(initialPostalCode || '');
+  const [selectedService, setSelectedService] = useState<string | undefined>(initialService);
   const [garages, setGarages] = useState<Garage[]>([]);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'compare'>('list');
@@ -74,6 +80,7 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
   const [slotEnd, setSlotEnd] = useState<Date | null>(null);
   // Temp user id after registration (before booking)
   const [tempUserId, setTempUserId] = useState<string | null>(null);
+  const [userCoord, setUserCoord] = useState<{ lat: number; lon: number } | null>(null);
 
   const services = [
     { id: 'oil_change', name: t('service.oil_change') },
@@ -83,9 +90,37 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
     { id: 'engine_diagnostic', name: t('service.engine_diagnostic') },
   ];
 
+  const haversineKm = (a: {lat:number, lon:number}, b: {lat:number, lon:number}) => {
+    const R = 6371; // km
+    const dLat = (b.lat - a.lat) * Math.PI / 180;
+    const dLon = (b.lon - a.lon) * Math.PI / 180;
+    const la1 = a.lat * Math.PI / 180;
+    const la2 = b.lat * Math.PI / 180;
+    const sinDLat = Math.sin(dLat/2);
+    const sinDLon = Math.sin(dLon/2);
+    const h = sinDLat*sinDLat + Math.cos(la1)*Math.cos(la2)*sinDLon*sinDLon;
+    const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1-h));
+    return R * c;
+  };
+
+  const geocode = async (q: string) => {
+    const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return null;
+    const j = await res.json();
+    return j.result as { lat: number; lon: number; display_name: string } | null;
+  };
+
   const handleSearch = async () => {
+    if (!postalCode.trim()) {
+      toast.error('Please enter a postal address/postal code');
+      return;
+    }
     setLoading(true);
     try {
+      // 1) Geocode user postalCode (Netherlands)
+      const userGeo = await geocode(`${postalCode}, Netherlands`);
+      setUserCoord(userGeo ? { lat: userGeo.lat, lon: userGeo.lon } : null);
+
       const params = new URLSearchParams();
       if (postalCode) params.set('postalCode', postalCode);
       if (selectedService) params.set('q', selectedService);
@@ -98,7 +133,7 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
       }
       const items = Array.isArray(json.items) ? json.items : [];
       // Map API items into local Garage shape (some fields are placeholders for now)
-      const mapped: Garage[] = items.map((g: any) => ({
+      let mapped: Garage[] = items.map((g: any) => ({
         id: g.id,
         name: g.name,
         location: g.city || '',
@@ -112,6 +147,33 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
         email: g.email || '',
         workingHours: g.workingHours || '',
       }));
+      // 2) Geocode garage addresses (top N for performance)
+      const toGeocode = mapped.slice(0, 15); // limit
+      const geoResults = await Promise.all(
+        toGeocode.map(async (g) => {
+          const q = [g.location, g.postalCode, 'Netherlands'].filter(Boolean).join(', ');
+          const resG = await geocode(q);
+          return resG ? { id: g.id, lat: resG.lat, lon: resG.lon } : { id: g.id, lat: undefined as any, lon: undefined as any };
+        })
+      );
+      const geoMap = new Map(geoResults.map(r => [r.id, r]));
+      mapped = mapped.map(g => {
+        const k = geoMap.get(g.id);
+        if (k && typeof k.lat === 'number' && typeof k.lon === 'number') {
+          const lat = k.lat; const lon = k.lon;
+          const distanceKm = userGeo ? haversineKm({ lat: userGeo.lat, lon: userGeo.lon }, { lat, lon }) : undefined;
+          return { ...g, lat, lon, distanceKm };
+        }
+        return g;
+      });
+
+      // 3) Sort by real distance if available, then rating
+      mapped.sort((a, b) => {
+        const ad = a.distanceKm ?? Number.POSITIVE_INFINITY;
+        const bd = b.distanceKm ?? Number.POSITIVE_INFINITY;
+        if (ad !== bd) return ad - bd;
+        return (b.rating || 0) - (a.rating || 0);
+      });
       setGarages(mapped);
     } catch (e) {
       console.error('Garage search failed', e);
@@ -249,8 +311,11 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
   };
 
   useEffect(() => {
-    handleSearch();
-  }, []);
+    if (autoSearch && postalCode) {
+      handleSearch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSearch]);
 
   return (
     <div className="min-h-screen">
@@ -313,27 +378,36 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
                       onChange={(e) => setPostalCode(e.target.value)}
                     />
                   </div>
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Service (Optional)
-                    </label>
-                    <Select value={selectedService} onValueChange={(val) => setSelectedService(val)} disabled={services.length === 0}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Services" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {services.length === 0 ? (
-                          <SelectItem value="__no_options" disabled>No services available</SelectItem>
-                        ) : (
-                          services.map((service) => (
-                            <SelectItem key={service.id} value={service.id}>
-                              {service.name}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {!initialService ? (
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Service (Optional)
+                      </label>
+                      <Select value={selectedService} onValueChange={(val) => setSelectedService(val)} disabled={services.length === 0}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="All Services" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {services.length === 0 ? (
+                            <SelectItem value="__no_options" disabled>No services available</SelectItem>
+                          ) : (
+                            services.map((service) => (
+                              <SelectItem key={service.id} value={service.id}>
+                                {service.name}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Service</label>
+                      <div className="h-10 px-3 flex items-center rounded-md border border-gray-200 bg-gray-50 text-sm text-gray-700">
+                        {services.find(s => s.id === initialService)?.name || 'Selected'}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <Button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700">
                       {t('common.search')}
@@ -349,6 +423,45 @@ export function GarageSearch({ vehicleData, onBack }: GarageSearchProps) {
               </CardContent>
             </Card>
           </motion.div>
+
+          {/* Map preview */}
+          {userCoord && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              className="mb-8"
+            >
+              <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-800">Area map (Netherlands)</h3>
+                    <span className="text-xs text-gray-500">Centered on {postalCode}</span>
+                  </div>
+                  {(() => {
+                    const markers: string[] = []
+                    const limited = garages.filter(g => typeof g.lat === 'number' && typeof g.lon === 'number').slice(0, 10)
+                    for (const g of limited) {
+                      markers.push(`${g.lat},${g.lon},lightblue1`)
+                    }
+                    const url = new URL('https://staticmap.openstreetmap.de/staticmap.php')
+                    url.searchParams.set('center', `${userCoord.lat},${userCoord.lon}`)
+                    url.searchParams.set('zoom', '11')
+                    url.searchParams.set('size', '640x320')
+                    if (markers.length) url.searchParams.set('markers', markers.join('|'))
+                    const mapUrl = url.toString()
+                    return (
+                      <img
+                        src={mapUrl}
+                        alt={`Map around ${postalCode}`}
+                        className="w-full h-64 object-cover rounded-md border"
+                      />
+                    )
+                  })()}
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
 
           {/* Results */}
           {loading ? (
