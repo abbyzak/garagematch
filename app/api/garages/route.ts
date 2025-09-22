@@ -38,7 +38,67 @@ export async function GET(req: NextRequest) {
     ])
 
     if (items.length === 0) {
-      return NextResponse.json({ items: [], total: 0 })
+      // Demo fallback: mock a few NL garages so the UI has data
+      const mocks = [
+        {
+          id: 'mock-ams',
+          name: 'Amsterdam Auto Care',
+          description: 'Trusted repairs and maintenance',
+          city: 'Amsterdam',
+          postalCode: '1012AB',
+          addressLine1: 'Damrak 1',
+          addressLine2: null,
+          country: 'Netherlands',
+          phone: null,
+          email: null,
+          workingHours: null,
+          image: '',
+          rating: 4.6,
+          reviews: 128,
+          services: ['oil_change','tire_service'],
+          prices: { oil_change: 79, tire_service: 49 },
+          location: 'Damrak 1, Amsterdam',
+        },
+        {
+          id: 'mock-ut',
+          name: 'Utrecht Garage Centrum',
+          description: 'Fast and friendly service',
+          city: 'Utrecht',
+          postalCode: '3511AD',
+          addressLine1: 'Neude 2',
+          addressLine2: null,
+          country: 'Netherlands',
+          phone: null,
+          email: null,
+          workingHours: null,
+          image: '',
+          rating: 4.3,
+          reviews: 76,
+          services: ['brake_service','engine_diagnostic'],
+          prices: { brake_service: 129, engine_diagnostic: 99 },
+          location: 'Neude 2, Utrecht',
+        },
+        {
+          id: 'mock-rtm',
+          name: 'Rotterdam Motorworks',
+          description: 'Comprehensive car care',
+          city: 'Rotterdam',
+          postalCode: '3011AA',
+          addressLine1: 'Coolsingel 10',
+          addressLine2: null,
+          country: 'Netherlands',
+          phone: null,
+          email: null,
+          workingHours: null,
+          image: '',
+          rating: 4.8,
+          reviews: 210,
+          services: ['battery_service','oil_change'],
+          prices: { battery_service: 149, oil_change: 85 },
+          location: 'Coolsingel 10, Rotterdam',
+        },
+      ]
+      return NextResponse.json({ items: mocks, total: mocks.length })
     }
 
     // Hydrate rating and reviews count from Review model
