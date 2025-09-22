@@ -25,6 +25,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        {/* Leaflet CSS for OpenStreetMap tiles and controls */}
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossOrigin=""
+        />
+      </head>
       <body className={inter.className}>
         <div className="fixed inset-0 -z-10">
           <Image src={heroBg} alt="Background" fill className="object-cover opacity-30" priority />
